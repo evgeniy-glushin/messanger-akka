@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <PackageReference Include="Akka.Cluster.Hosting" Version="$(AkkaHostingVersion)" />
+    <PackageReference Include="Akka.Persistence.SqlServer" Version="1.4.35" />
     <PackageReference Include="Petabridge.Cmd.Cluster.Sharding" Version="$(PbmVersion)" />
     <PackageReference Include="Petabridge.Cmd.Cluster" Version="$(PbmVersion)" />
     <PackageReference Include="Petabridge.Cmd.Remote" Version="$(PbmVersion)" />

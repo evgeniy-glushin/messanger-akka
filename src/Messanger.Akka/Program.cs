@@ -46,7 +46,7 @@ builder.Services.AddAkka(akkaConfig.ActorSystemName, (builder, provider) =>
             registry.Register<ConsoleActor>(consoleActor);
             
             var conversationCoordinatorActor = system.ActorOf(Props.Create(() => new ConversationCoordinatorActor()), "conversation-coordinator");
-            registry.Register<ConsoleActor>(conversationCoordinatorActor);
+            registry.Register<ConversationCoordinatorActor>(conversationCoordinatorActor);
         });
 });
 
@@ -78,13 +78,20 @@ app.UseEndpoints(endpoints =>
         await context.Response.WriteAsync("created");
     });
     
+    endpoints.MapGet("/conversation/bump-index", async (HttpContext context, ActorRegistry registry) =>
+    {
+        var coordinator = registry.Get<ConversationCoordinatorActor>();
+        
+        //var conversationActor = system.ActorOf(Props.Create(() => new ConversationActor("himars")), $"{id}");
+        var conversationActor = await coordinator.Ask<IActorRef>(new GetConversationActor("himars"));
+        conversationActor.Tell(new BumpIndex());
+        var index = await conversationActor.Ask<int>(new GetIndex());
+        
+        await context.Response.WriteAsync($"current index: {index}");
+    });
+    
     endpoints.MapGet("/conversation/participant", async (HttpContext context, ActorRegistry registry) =>
     {
-        //var reporter = registry.Get<ConversationCoordinatorActor>();
-        
-        //registry.
-        //reporter.Tell(new CreateConversationCommand("himars", "Bavovna"));
-        
         await context.Response.WriteAsync("participant added");
     });
 });

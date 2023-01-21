@@ -3,41 +3,63 @@ using Akka.Persistence;
 
 namespace Messenger.Akka;
 
-public class ConversationCoordinatorActor : ReceivePersistentActor
+public class ConversationCoordinatorActor : ReceiveActor
 {
-    public override string PersistenceId { get; } = "conversation-coordinator";
+    private Dictionary<string, IActorRef?> _activeConversations = new();
+    //public override string PersistenceId { get; } = "conversation-coordinator";
 
     public ConversationCoordinatorActor()
     {
         // Context.System.ActorSelection($"/user/conversation-coordinator/himars")
         //     .Tell(new CauseErrorMessage());
         
-        Context.ActorOf(
-            Props.Create(() =>
-                new PlayerActor(createPlayerMessage.PlayerName, DefaultStartingHealth)), createPlayerMessage.PlayerName);
-        
-        Command<CreateConversationCommand>(command =>
+        Receive<CreateConversationCommand>(cmd =>
         {
-            Persist(command, payload =>
+            var conversationActor = Context.ActorOf(Props.Create(() => new ConversationActor(cmd.ConversationId)), $"conversation-{cmd.ConversationId}");
+            conversationActor.Tell(new InitConversation(cmd.ConversationId, cmd.Subject));
+            _activeConversations.Add(cmd.ConversationId, conversationActor);
+        });
+
+        Receive<GetConversationActor>(cmd =>
+        {
+            if (_activeConversations.ContainsKey(cmd.ConversationId))
             {
-                Context.ActorOf(
-                    Props.Create(() => new ConversationActor(payload.ConversationId, payload.Subject)), $"conversation-{command.ConversationId}");
-                
-                
-            });
+                Sender.Tell(_activeConversations[cmd.ConversationId]);
+            }
+            else
+            {
+                var actor = Context.ActorOf(Props.Create(() => new ConversationActor("himars")), $"conversation-{cmd.ConversationId}");
+                _activeConversations.Add(cmd.ConversationId, actor);
+                Sender.Tell(actor);
+            }
         });
     }
 }
 
 public class ConversationActor : ReceivePersistentActor
 {
-    public override string PersistenceId => _state?.ConversationId;
+    public override string PersistenceId => _id;
     
     private ConversationActorState _state;
+    private string _id;
 
-    public ConversationActor(string conversationId, string subject)
+    private int _index = 0;
+
+    public ConversationActor(string id)
     {
-        _state = new ConversationActorState(conversationId, subject);
+        _id = id;
+        Command<InitConversation>(command =>
+        {
+            Persist(command, persisted =>
+            {
+                _state = new ConversationActorState(persisted.ConversationId, persisted.Subject);
+            });
+        });
+        
+        Recover<InitConversation>(msg =>
+        {
+            _state = new ConversationActorState(msg.ConversationId, msg.Subject);
+        });
         
         Command<AddParticipantCommand>(command =>
         {
@@ -50,8 +72,20 @@ public class ConversationActor : ReceivePersistentActor
                 };
             });   
         });
+        
+        Command<GetIndex>(_ => Sender.Tell(_index));
+        
+        Command<BumpIndex>(_ => ++_index);
     }
 }
+
+public record GetIndex();
+
+public record BumpIndex();
+
+public record GetConversationActor(string ConversationId);
+
+public record InitConversation(string ConversationId, string Subject);
 
 public record ConversationActorState(string ConversationId, string Subject)
 {
